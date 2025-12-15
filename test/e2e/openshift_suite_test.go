@@ -41,7 +41,7 @@ import (
 // ============================================================================
 //
 // This test suite installs the Spark operator from a REMOTE Helm repository
-// (https://shruthis4.github.io) instead of the local chart directory.
+// (https://shruthis4.github.io/spark-operator) instead of the local chart directory.
 //
 // Key differences from the standard e2e tests:
 // 1. Uses Helm repo add + install (remote) instead of local chart path
@@ -56,7 +56,7 @@ const (
 
 	// Your custom Helm repository
 	OpenShiftHelmRepoName = "shruthis4-spark-operator"
-	OpenShiftHelmRepoURL  = "https://shruthis4.github.io"
+	OpenShiftHelmRepoURL  = "https://shruthis4.github.io/spark-operator"
 
 	// Chart name in the repository
 	OpenShiftChartName = "spark-operator"
@@ -100,7 +100,7 @@ func setupOpenShiftTestSuite() {
 	}
 
 	// Step 4: Add the Helm repository
-	By("Adding Helm repository: " + OpenShiftHelmRepoURL)
+	By("Adding Helm repository: " + OpenShiftHelmRepoURL + " as " + OpenShiftHelmRepoName)
 	addHelmRepo()
 
 	// Step 5: Install the chart from the remote repository

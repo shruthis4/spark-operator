@@ -39,7 +39,7 @@ import (
 // ============================================================================
 //
 // These tests verify:
-// 1. The Spark operator installs correctly from the custom Helm repository
+// 1. The Spark operator installs correctly from https://shruthis4.github.io/spark-operator
 // 2. The fsGroup security context is NOT set to 185 (OpenShift requirement)
 // 3. The docling-spark-app workload runs successfully
 //
@@ -71,7 +71,7 @@ var _ = Describe("OpenShift Spark Operator", Ordered, func() {
 	//
 	// OpenShift has specific security requirements. The default fsGroup of 185
 	// may not be appropriate for all OpenShift environments. This test verifies
-	// that the custom chart from shruthis4.github.io uses a different fsGroup.
+	// that the custom chart from shruthis4.github.io/spark-operator uses a different fsGroup.
 	//
 	// ========================================================================
 	Context("Operator Security Configuration", func() {

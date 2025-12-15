@@ -3,7 +3,7 @@
 # ============================================================================
 #
 # This workflow tests the Spark operator from a custom Helm repository:
-#   https://shruthis4.github.io
+#   https://shruthis4.github.io/spark-operator
 #
 # Tests performed:
 #   1. Installs Spark operator from remote Helm repo (not local chart)
@@ -111,8 +111,8 @@ jobs:
       # ======================================================================
       - name: Add custom Helm repository
         run: |
-          echo "Adding Helm repository: https://shruthis4.github.io"
-          helm repo add shruthis4-spark-operator https://shruthis4.github.io
+          echo "Adding Helm repository: https://shruthis4.github.io/spark-operator"
+          helm repo add shruthis4-spark-operator https://shruthis4.github.io/spark-operator
           helm repo update
           echo "Available charts:"
           helm search repo shruthis4-spark-operator
@@ -125,7 +125,7 @@ jobs:
         run: |
           echo "Running OpenShift E2E tests..."
           echo "These tests will:"
-          echo "  1. Install Spark operator from https://shruthis4.github.io"
+          echo "  1. Install Spark operator from https://shruthis4.github.io/spark-operator"
           echo "  2. Verify fsGroup is NOT 185"
           echo "  3. Run docling-spark-app workload"
           echo ""

@@ -19,7 +19,7 @@
 # ============================================================================
 #
 # These values are used when testing the Spark operator from:
-#   https://shruthis4.github.io
+#   https://shruthis4.github.io/spark-operator
 #
 # Key differences from default values:
 # - fsGroup should NOT be 185 (OpenShift security requirement)
