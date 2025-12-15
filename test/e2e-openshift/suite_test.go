@@ -73,9 +73,9 @@ const (
 	ReleaseName      = "spark-operator-openshift"
 	ReleaseNamespace = "spark-operator-openshift"
 
-	// Webhook names (must match what the chart creates)
-	MutatingWebhookName   = "spark-operator-webhook"
-	ValidatingWebhookName = "spark-operator-webhook"
+	// Webhook names (must match what the chart creates: {{ fullname }}-webhook)
+	MutatingWebhookName   = "spark-operator-openshift-webhook"
+	ValidatingWebhookName = "spark-operator-openshift-webhook"
 
 	// Custom Helm repository
 	HelmRepoName = "shruthis4-spark-operator"
