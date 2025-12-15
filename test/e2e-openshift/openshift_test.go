@@ -153,6 +153,17 @@ var _ = Describe("OpenShift Spark Operator", func() {
 			GinkgoWriter.Printf("  Image: %s\n", *app.Spec.Image)
 			GinkgoWriter.Printf("  MainApplicationFile: %s\n", *app.Spec.MainApplicationFile)
 
+			// Inject SKIP_SLEEP env var for testing (skip the 60-minute sleep)
+			By("Injecting SKIP_SLEEP=true environment variable")
+			if app.Spec.Driver.Env == nil {
+				app.Spec.Driver.Env = []corev1.EnvVar{}
+			}
+			app.Spec.Driver.Env = append(app.Spec.Driver.Env, corev1.EnvVar{
+				Name:  "SKIP_SLEEP",
+				Value: "true",
+			})
+			GinkgoWriter.Printf("✓ Added SKIP_SLEEP=true to driver environment\n")
+
 			By("Creating SparkApplication: " + app.Name)
 			err = k8sClient.Create(ctx, app)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create SparkApplication")
