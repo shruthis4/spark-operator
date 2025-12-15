@@ -172,6 +172,12 @@ var _ = Describe("OpenShift Spark Operator", func() {
 		})
 
 		AfterEach(func() {
+			// Skip cleanup on failure to allow log inspection
+			if CurrentSpecReport().Failed() {
+				GinkgoWriter.Printf("⚠️  Test failed - preserving SparkApplication for debugging\n")
+				return
+			}
+
 			if app != nil {
 				By("Cleaning up SparkApplication: " + app.Name)
 				key := types.NamespacedName{Namespace: app.Namespace, Name: app.Name}
@@ -194,6 +200,19 @@ var _ = Describe("OpenShift Spark Operator", func() {
 
 			// Use the helper function to wait for completion
 			err := waitForSparkApplicationCompleted(ctx, key)
+
+			// If failed, get current status for debugging
+			if err != nil {
+				currentApp := &v1beta2.SparkApplication{}
+				if getErr := k8sClient.Get(ctx, key, currentApp); getErr == nil {
+					GinkgoWriter.Printf("❌ SparkApplication Status on failure:\n")
+					GinkgoWriter.Printf("   State: %s\n", currentApp.Status.AppState.State)
+					GinkgoWriter.Printf("   Error: %s\n", currentApp.Status.AppState.ErrorMessage)
+					GinkgoWriter.Printf("   SubmissionAttempts: %d\n", currentApp.Status.SubmissionAttempts)
+					GinkgoWriter.Printf("   ExecutionAttempts: %d\n", currentApp.Status.ExecutionAttempts)
+				}
+			}
+
 			Expect(err).NotTo(HaveOccurred(), "SparkApplication did not complete successfully")
 
 			GinkgoWriter.Printf("✓ SparkApplication completed successfully\n")
