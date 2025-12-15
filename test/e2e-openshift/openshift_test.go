@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package e2e_test
+package e2e_openshift_test
 
 import (
 	"context"
@@ -43,28 +43,12 @@ import (
 // 2. The fsGroup security context is NOT set to 185 (OpenShift requirement)
 // 3. The docling-spark-app workload runs successfully
 //
-// To run ONLY these tests:
-//   go test ./test/e2e/ -v -ginkgo.v -ginkgo.focus="OpenShift" -timeout 30m
+// To run these tests:
+//   go test ./test/e2e-openshift/ -v -ginkgo.v -timeout 30m
 //
 // ============================================================================
 
-var _ = Describe("OpenShift Spark Operator", Ordered, func() {
-	// ========================================================================
-	// SETUP: Run once before all OpenShift tests
-	// ========================================================================
-	BeforeAll(func() {
-		// Setup installs the operator from the remote Helm repo
-		setupOpenShiftTestSuite()
-	})
-
-	// ========================================================================
-	// TEARDOWN: Run once after all OpenShift tests
-	// ========================================================================
-	AfterAll(func() {
-		// Teardown uninstalls the operator and cleans up namespaces
-		teardownOpenShiftTestSuite()
-	})
-
+var _ = Describe("OpenShift Spark Operator", func() {
 	// ========================================================================
 	// TEST 1: Verify fsGroup is NOT 185
 	// ========================================================================
@@ -79,15 +63,15 @@ var _ = Describe("OpenShift Spark Operator", Ordered, func() {
 			By("Getting the Spark operator pods")
 			pods := &corev1.PodList{}
 
-			// Find pods in the OpenShift release namespace with the operator label
+			// Find pods in the release namespace
 			err := k8sClient.List(context.Background(), pods,
-				client.InNamespace(OpenShiftReleaseNamespace),
+				client.InNamespace(ReleaseNamespace),
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			// We expect at least one operator pod
 			Expect(len(pods.Items)).To(BeNumerically(">", 0),
-				"Expected at least one pod in namespace %s", OpenShiftReleaseNamespace)
+				"Expected at least one pod in namespace %s", ReleaseNamespace)
 
 			By("Checking fsGroup on each operator pod")
 			checkedPods := 0
@@ -197,7 +181,7 @@ var _ = Describe("OpenShift Spark Operator", Ordered, func() {
 			By("Waiting for SparkApplication to complete")
 			key := types.NamespacedName{Namespace: app.Namespace, Name: app.Name}
 
-			// Use the existing helper function to wait for completion
+			// Use the helper function to wait for completion
 			err := waitForSparkApplicationCompleted(ctx, key)
 			Expect(err).NotTo(HaveOccurred(), "SparkApplication did not complete successfully")
 
