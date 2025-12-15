@@ -80,16 +80,35 @@ jobs:
           go-version-file: go.mod
 
       # ======================================================================
-      # Step 3: Create a Kind cluster
+      # Step 3: Free up disk space
+      # The docling-spark image is very large (~800MB+), need space
+      # ======================================================================
+      - name: Free up disk space
+        run: |
+          echo "=== Disk space BEFORE cleanup ==="
+          df -h
+          
+          echo ""
+          echo "Removing unused Docker resources..."
+          docker system prune -af --volumes
+          
+          echo ""
+          echo "=== Disk space AFTER cleanup ==="
+          df -h
+
+      # ======================================================================
+      # Step 4: Create a Kind cluster
       # This creates a local Kubernetes cluster using Docker containers
       # ======================================================================
       - name: Create Kind cluster
+        env:
+          K8S_VERSION: ${{ inputs.k8s_version || 'v1.30.8' }}
         run: |
           echo "Creating Kind cluster with Kubernetes ${K8S_VERSION}..."
           make kind-create-cluster KIND_K8S_VERSION=${K8S_VERSION}
 
       # ======================================================================
-      # Step 4: Verify cluster is ready
+      # Step 5: Verify cluster is ready
       # ======================================================================
       - name: Verify cluster
         run: |
@@ -99,7 +118,7 @@ jobs:
           echo "Cluster is ready!"
 
       # ======================================================================
-      # Step 5: Add Helm repository
+      # Step 6: Add Helm repository
       # This adds the custom Spark operator Helm repository
       # ======================================================================
       - name: Add custom Helm repository
@@ -111,8 +130,7 @@ jobs:
           helm search repo shruthis4-spark-operator
 
       # ======================================================================
-      # Step 6: Run OpenShift E2E tests
-      # Uses -ginkgo.focus to run ONLY the OpenShift tests
+      # Step 7: Run OpenShift E2E tests
       # ======================================================================
       - name: Run OpenShift E2E tests
         run: |
@@ -130,7 +148,7 @@ jobs:
             -timeout 30m
 
       # ======================================================================
-      # Step 7: Collect logs on failure
+      # Step 8: Collect logs on failure
       # ======================================================================
       - name: Collect logs on failure
         if: failure()
@@ -167,7 +185,7 @@ jobs:
           kubectl get events -A --sort-by='.lastTimestamp' | tail -50
 
       # ======================================================================
-      # Step 8: Cleanup
+      # Step 9: Cleanup
       # ======================================================================
       - name: Cleanup Kind cluster
         if: always()
