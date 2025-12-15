@@ -32,6 +32,7 @@ on:
   push:
     branches:
       - release*
+      - doclingSparkTest #temporary branch for testing
     paths:
       - 'examples/openshift/**'
       - 'test/e2e/openshift_*'
