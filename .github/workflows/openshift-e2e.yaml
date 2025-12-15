@@ -59,7 +59,7 @@ concurrency:
 jobs:
   openshift-e2e:
     name: OpenShift E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-8-cores  # Use larger runner for docling image (~150GB disk vs ~14GB ubuntu-latest)
     env:
       K8S_VERSION: ${{ inputs.k8s_version || 'v1.30.8' }}
     steps:
