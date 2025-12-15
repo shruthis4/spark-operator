@@ -1,0 +1,172 @@
+# ============================================================================
+# OpenShift E2E Test Workflow
+# ============================================================================
+#
+# This workflow tests the Spark operator from a custom Helm repository:
+#   https://shruthis4.github.io
+#
+# Tests performed:
+#   1. Installs Spark operator from remote Helm repo (not local chart)
+#   2. Verifies fsGroup is NOT 185 (OpenShift security requirement)
+#   3. Runs the docling-spark-app workload from examples/openshift/k8s/
+#
+# Triggers:
+#   - Manual (workflow_dispatch)
+#   - Push to release* branches when OpenShift-related files change
+#   - Pull requests when OpenShift-related files change
+#
+# ============================================================================
+
+name: OpenShift E2E Test
+
+on:
+  # Manual trigger - allows running from GitHub Actions UI or CLI
+  workflow_dispatch:
+    inputs:
+      k8s_version:
+        description: "Kubernetes version to test"
+        required: false
+        default: "v1.30.8"
+
+  # Automatic trigger on push to release branches
+  push:
+    branches:
+      - release*
+    paths:
+      - 'examples/openshift/**'
+      - 'test/e2e/openshift_*'
+      - '.github/workflows/openshift-e2e.yaml'
+
+  # Automatic trigger on pull requests
+  pull_request:
+    branches:
+      - master
+      - release*
+    paths:
+      - 'examples/openshift/**'
+      - 'test/e2e/openshift_*'
+      - '.github/workflows/openshift-e2e.yaml'
+
+permissions:
+  contents: read
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  openshift-e2e:
+    name: OpenShift E2E Tests
+    runs-on: ubuntu-latest
+
+    # Test against multiple Kubernetes versions if needed
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s_version:
+          - v1.29.12
+          - v1.30.8
+
+    steps:
+      # ======================================================================
+      # Step 1: Checkout the repository
+      # ======================================================================
+      - name: Checkout source code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # ======================================================================
+      # Step 2: Set up Go
+      # ======================================================================
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # ======================================================================
+      # Step 3: Create a Kind cluster
+      # This creates a local Kubernetes cluster using Docker containers
+      # ======================================================================
+      - name: Create Kind cluster
+        run: |
+          echo "Creating Kind cluster with Kubernetes ${{ matrix.k8s_version }}..."
+          make kind-create-cluster KIND_K8S_VERSION=${{ matrix.k8s_version }}
+
+      # ======================================================================
+      # Step 4: Verify cluster is ready
+      # ======================================================================
+      - name: Verify cluster
+        run: |
+          echo "Verifying Kind cluster is ready..."
+          kubectl cluster-info
+          kubectl get nodes
+          echo "Cluster is ready!"
+
+      # ======================================================================
+      # Step 5: Add Helm repository
+      # This adds the custom Spark operator Helm repository
+      # ======================================================================
+      - name: Add custom Helm repository
+        run: |
+          echo "Adding Helm repository: https://shruthis4.github.io"
+          helm repo add shruthis4-spark-operator https://shruthis4.github.io
+          helm repo update
+          echo "Available charts:"
+          helm search repo shruthis4-spark-operator
+
+      # ======================================================================
+      # Step 6: Run OpenShift E2E tests
+      # Uses -ginkgo.focus to run ONLY the OpenShift tests
+      # ======================================================================
+      - name: Run OpenShift E2E tests
+        run: |
+          echo "Running OpenShift E2E tests..."
+          echo "These tests will:"
+          echo "  1. Install Spark operator from https://shruthis4.github.io"
+          echo "  2. Verify fsGroup is NOT 185"
+          echo "  3. Run docling-spark-app workload"
+          echo ""
+
+          # Run only tests matching "OpenShift" in their description
+          go test ./test/e2e/ \
+            -v \
+            -ginkgo.v \
+            -ginkgo.focus="OpenShift" \
+            -timeout 30m
+
+      # ======================================================================
+      # Step 7: Collect logs on failure
+      # ======================================================================
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -A
+
+          echo ""
+          echo "=== Spark Operator Logs ==="
+          kubectl logs -n spark-operator-openshift -l app.kubernetes.io/name=spark-operator --tail=100 || true
+
+          echo ""
+          echo "=== Docling Namespace ==="
+          kubectl get all -n docling-spark || true
+
+          echo ""
+          echo "=== SparkApplication Status ==="
+          kubectl get sparkapplication -A -o yaml || true
+
+          echo ""
+          echo "=== Events ==="
+          kubectl get events -A --sort-by='.lastTimestamp' | tail -50
+
+      # ======================================================================
+      # Step 8: Cleanup
+      # ======================================================================
+      - name: Cleanup Kind cluster
+        if: always()
+        run: |
+          echo "Cleaning up Kind cluster..."
+          make kind-delete-cluster || true
+
