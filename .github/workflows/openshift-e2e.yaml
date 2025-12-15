@@ -143,15 +143,27 @@ jobs:
           kubectl logs -n spark-operator-openshift -l app.kubernetes.io/name=spark-operator --tail=100 || true
 
           echo ""
-          echo "=== Docling Namespace ==="
-          kubectl get all -n docling-spark || true
+          echo "=== Docling Namespace Pods ==="
+          kubectl get pods -n docling-spark -o wide || true
+
+          echo ""
+          echo "=== Driver Pod Details ==="
+          kubectl describe pod -n docling-spark -l spark-role=driver || true
+
+          echo ""
+          echo "=== Driver Pod Logs ==="
+          kubectl logs -n docling-spark -l spark-role=driver --tail=100 || true
 
           echo ""
           echo "=== SparkApplication Status ==="
           kubectl get sparkapplication -A -o yaml || true
 
           echo ""
-          echo "=== Events ==="
+          echo "=== Events in docling-spark namespace ==="
+          kubectl get events -n docling-spark --sort-by='.lastTimestamp' || true
+
+          echo ""
+          echo "=== All Recent Events ==="
           kubectl get events -A --sort-by='.lastTimestamp' | tail -50
 
       # ======================================================================
