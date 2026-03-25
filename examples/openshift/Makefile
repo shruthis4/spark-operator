@@ -16,6 +16,10 @@ export PATH := $(LOCALBIN):$(PATH)
 # Configuration
 KIND_CLUSTER_NAME ?= spark-operator
 CLEANUP ?= true
+NAMESPACE ?= spark-operator
+CONTROLLER_SA ?= spark-operator-controller
+SCHED_NAME ?= rbac-scheduled-smoke
+TIMEOUT_SECONDS ?= 180
 
 ##@ General
 
@@ -78,9 +82,29 @@ test-docling-spark: ## Run Docling Spark test on KIND or OpenShift.
 	chmod +x $(TESTS_DIR)/test-docling-spark.sh
 	CLEANUP=$(CLEANUP) $(TESTS_DIR)/test-docling-spark.sh
 
+.PHONY: scheduledspark-rbac-check
+scheduledspark-rbac-check: ## RBAC preflight for ScheduledSparkApplication.
+	@echo "Running RBAC preflight for ScheduledSparkApplication..."
+	chmod +x $(TESTS_DIR)/check-scheduledspark-rbac.sh
+	NAMESPACE=$(NAMESPACE) CONTROLLER_SA=$(CONTROLLER_SA) \
+		$(TESTS_DIR)/check-scheduledspark-rbac.sh
+
+.PHONY: scheduledspark-smoke
+scheduledspark-smoke: ## ScheduledSparkApplication smoke test.
+	@echo "Running ScheduledSparkApplication smoke test..."
+	chmod +x $(TESTS_DIR)/test-scheduledspark-smoke.sh
+	NAMESPACE=$(NAMESPACE) SCHED_NAME=$(SCHED_NAME) TIMEOUT_SECONDS=$(TIMEOUT_SECONDS) \
+		$(TESTS_DIR)/test-scheduledspark-smoke.sh
+
+.PHONY: scheduledspark-verify
+scheduledspark-verify: ## RBAC + ScheduledSparkApplication combined verification.
+	$(MAKE) scheduledspark-rbac-check
+	$(MAKE) scheduledspark-smoke
+
 .PHONY: test-all
-test-all: ## Run all tests (operator-install, spark-pi, docling).
+test-all: ## Run all tests (operator-install, spark-pi, docling, scheduledspark).
 	@echo "Running all OpenShift/KIND tests..."
 	$(MAKE) operator-install CLEANUP=false
 	$(MAKE) test-spark-pi CLEANUP=false
-	$(MAKE) test-docling-spark
+	$(MAKE) test-docling-spark CLEANUP=false
+	$(MAKE) scheduledspark-verify
