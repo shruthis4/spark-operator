@@ -1,0 +1,25 @@
+# CODEOWNERS for Kubeflow Spark Operator
+# These owners will be the default reviewers for everything in the repo.
+# For more information, see:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @andreyvelich @ChenYi015 @jacobsalway @mwielgus @vara-bonthu @yuchaoran2011
+
+# Helm chart
+/charts/ @andreyvelich @ChenYi015 @jacobsalway
+
+# GitHub workflows and CI/CD
+/.github/ @andreyvelich @ChenYi015
+
+# Documentation
+/docs/ @andreyvelich @ChenYi015 @jacobsalway
+*.md @andreyvelich @ChenYi015
+
+# API and CRDs
+/api/ @andreyvelich @ChenYi015 @mwielgus @yuchaoran2011
+/config/crd/ @andreyvelich @ChenYi015 @mwielgus @yuchaoran2011
+
+# Controller code
+/internal/ @andreyvelich @ChenYi015 @mwielgus @yuchaoran2011
+/pkg/ @andreyvelich @ChenYi015 @mwielgus @yuchaoran2011

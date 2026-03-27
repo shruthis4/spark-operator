@@ -22,8 +22,16 @@ body:
   - type: textarea
     id: reproduce
     attributes:
-      label: Reproduction Code
-      description: Steps to reproduce the behavior.
+      label: Steps to Reproduce
+      description: |
+        Please provide detailed steps to reproduce the issue.
+        Include relevant YAML configurations, commands run, and any other context.
+      placeholder: |
+        1. Deploy Spark Operator with configuration...
+        2. Apply SparkApplication manifest...
+        3. Observe error in logs...
+    validations:
+      required: true
   - type: textarea
     id: expected
     attributes:
@@ -35,18 +43,51 @@ body:
       label: Actual behavior
       description: A clear and concise description of what actually happened.
   - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: |
+        Please provide relevant log output from the Spark Operator, driver, or executor pods.
+        Use code blocks for better readability.
+      render: shell
+  - type: textarea
     id: environment
     attributes:
       label: Environment & Versions
+      description: Please provide version information for your environment
       value: |
         - Kubernetes Version:
         - Spark Operator Version:
         - Apache Spark Version:
+        - Deployment Method (Helm/Kustomize/Operator):
+        - Cloud Provider (if applicable):
+    validations:
+      required: true
   - type: textarea
     id: context
     attributes:
       label: Additional context
       description: Add any other context about the problem here.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Bug Severity
+      description: How severe is this bug?
+      options:
+        - Low (cosmetic issue, workaround available)
+        - Medium (impacts functionality, workaround available)
+        - High (impacts functionality, no workaround)
+        - Critical (system unusable, data loss, security issue)
+    validations:
+      required: false
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      description: Would you like to contribute a fix for this issue?
+      options:
+        - label: I am willing to submit a PR to fix this issue
+          required: false
   - type: input
     id: votes
     attributes:
