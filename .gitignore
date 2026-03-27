@@ -4,5 +4,6 @@ bin/
 codecov.yaml
 cover.out
 cover.html
+coverage.txt
 .DS_Store
 *.iml

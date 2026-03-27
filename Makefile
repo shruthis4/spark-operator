@@ -162,10 +162,18 @@ go-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes.
 unit-test: setup-envtest ## Run unit tests.
 	@echo "Running unit tests..."
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"
-	go test $(shell go list ./... | grep -v /e2e) -coverprofile cover.out
+	go test $(shell go list ./... | grep -v /e2e) -coverprofile cover.out -covermode=atomic
 	@echo "Generating HTML coverage report..."
 	go tool cover -html=cover.out -o cover.html
 	@echo "Coverage report available at cover.html"
+	@echo "Generating coverage summary..."
+	@go tool cover -func=cover.out | tail -1
+
+.PHONY: coverage
+coverage: unit-test ## Run tests and generate coverage reports in multiple formats.
+	@echo "Generating coverage reports..."
+	@go tool cover -func=cover.out -o coverage.txt
+	@echo "Coverage reports generated: cover.out (Go), cover.html (HTML), coverage.txt (summary)"
 
 .PHONY: e2e-test
 e2e-test: envtest ## Run the e2e tests against a Kind k8s instance that is spun up.
