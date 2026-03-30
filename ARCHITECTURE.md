@@ -1,319 +1,321 @@
 # Spark Operator Architecture
 
-This document provides a high-level overview of the Spark Operator architecture, its core components, and how they interact to manage Apache Spark applications on Kubernetes.
+This document provides an architectural overview of the Kubernetes Operator for Apache Spark (Spark Operator).
 
 ## Overview
 
-The Kubernetes Operator for Apache Spark (Spark Operator) enables running Apache Spark applications natively on Kubernetes using custom resources. It follows the Kubernetes Operator pattern, watching for custom resource changes and reconciling the desired state with the actual state of Spark applications in the cluster.
-
-## Architecture Diagram
+The Spark Operator is a Kubernetes operator that manages the lifecycle of Apache Spark applications on Kubernetes. It uses Custom Resource Definitions (CRDs) to extend the Kubernetes API with `SparkApplication` and `ScheduledSparkApplication` resources.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Kubernetes API                        │
-└──────────────────┬──────────────────────────────────────────┘
-                   │
-                   │ Watch/Update
-                   │
-┌──────────────────▼──────────────────────────────────────────┐
-│                    Spark Operator                            │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Controllers                             │   │
-│  │  • SparkApplication Controller                       │   │
-│  │  • ScheduledSparkApplication Controller              │   │
-│  │  • MutatingWebhookConfiguration Controller           │   │
-│  └──────────────────────────────────────────────────────┘   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Mutating Webhook                        │   │
-│  │  • Pod mutation and injection                        │   │
-│  │  • Volume mounting                                   │   │
-│  │  • Resource customization                            │   │
-│  └──────────────────────────────────────────────────────┘   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Support Components                      │   │
-│  │  • Metrics exporter (Prometheus)                     │   │
-│  │  • Scheduler extender                                │   │
-│  │  • Client libraries                                  │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                   │
-                   │ Creates/Manages
-                   │
-┌──────────────────▼──────────────────────────────────────────┐
-│              Spark Application Pods                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │    Driver    │  │  Executor 1  │  │  Executor N  │      │
-│  │     Pod      │  │     Pod      │  │     Pod      │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        Kubernetes Cluster                         │
+│                                                                    │
+│  ┌──────────────────┐         ┌──────────────────┐               │
+│  │  SparkApplication│         │ScheduledSpark    │               │
+│  │     CRDs         │         │Application CRDs  │               │
+│  └────────┬─────────┘         └────────┬─────────┘               │
+│           │                            │                          │
+│           ▼                            ▼                          │
+│  ┌────────────────────────────────────────────────┐              │
+│  │         Spark Operator Controller              │              │
+│  │  ┌──────────────┐  ┌─────────────────────┐    │              │
+│  │  │SparkApp      │  │ScheduledSparkApp    │    │              │
+│  │  │Controller    │  │Controller (Cron)    │    │              │
+│  │  └──────┬───────┘  └─────────┬───────────┘    │              │
+│  └─────────┼──────────────────────┼────────────────┘              │
+│            │                      │                               │
+│            ▼                      ▼                               │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │         Mutating Webhook                    │                 │
+│  │  (Pod Customization & Validation)           │                 │
+│  └─────────────────┬───────────────────────────┘                 │
+│                    │                                              │
+│                    ▼                                              │
+│  ┌──────────────────────────────────────────────────────┐        │
+│  │           Spark Driver & Executor Pods               │        │
+│  │  ┌──────────┐  ┌──────────┐   ┌──────────┐          │        │
+│  │  │ Driver   │  │Executor  │...│Executor  │          │        │
+│  │  │   Pod    │  │  Pod 1   │   │  Pod N   │          │        │
+│  │  └──────────┘  └──────────┘   └──────────┘          │        │
+│  └──────────────────────────────────────────────────────┘        │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
 
 ### 1. Custom Resource Definitions (CRDs)
 
-#### SparkApplication
-The primary CRD that represents a Spark application to be run on Kubernetes. It includes:
-- Application metadata (name, namespace, labels)
-- Spark configuration (driver/executor settings, Spark conf)
-- Dependencies (jars, files, pyFiles)
-- Resource specifications
-- Monitoring and metrics configuration
+The operator defines two primary CRDs:
 
-**Location:** `api/v1beta2/sparkapplication_types.go`
+#### SparkApplication (`api/v1beta2/sparkapplication_types.go`)
+- Represents a single Spark application to be run on Kubernetes
+- Spec includes:
+  - Spark image and version
+  - Driver and executor configurations
+  - Application code location
+  - Dependencies and environment variables
+  - Scheduling options (batch schedulers like Volcano, YuniKorn)
+  - Monitoring and metrics configuration
 
-#### ScheduledSparkApplication
-Extends SparkApplication with cron-based scheduling capabilities for recurring Spark jobs.
-
-**Location:** `api/v1beta2/scheduledsparkapplication_types.go`
+#### ScheduledSparkApplication (`api/v1beta2/scheduledsparkapplication_types.go`)
+- Wraps SparkApplication with cron-based scheduling
+- Allows recurring Spark jobs using cron expressions
+- Maintains history of executed applications
 
 ### 2. Controllers
 
-Controllers implement the reconciliation logic using the controller-runtime framework.
+Located in `internal/controller/`, the controllers watch CRD resources and reconcile their desired state.
 
-#### SparkApplication Controller
-**Location:** `internal/controller/sparkapplication/`
-
+#### SparkApplication Controller (`internal/controller/sparkapplication/`)
 **Responsibilities:**
-- Watches SparkApplication resources
-- Manages application lifecycle (submission, monitoring, cleanup)
-- Handles application state transitions
-- Manages driver and executor pods
-- Configures driver ingress for UI access
-- Exports metrics to Prometheus
-- Implements retry logic for failed submissions
-- Manages automatic restart policies
+- Watch SparkApplication resources
+- Submit applications to Spark using `spark-submit`
+- Monitor application status and update CRD status
+- Handle application lifecycle (submission, running, completion, failure)
+- Manage driver and executor pod lifecycle
+- Configure monitoring and metrics collection
+- Support batch schedulers (Volcano, YuniKorn, Kube-scheduler)
 
 **Key Files:**
 - `controller.go` - Main reconciliation logic
-- `submission.go` - Spark application submission handling
-- `driveringress.go` - Driver UI ingress management
-- `monitoring_config.go` - Metrics and monitoring setup
+- `submission.go` - spark-submit wrapper and execution
+- `validator.go` - Application specification validation
+- `monitoring_config.go` - Prometheus metrics configuration
+- `web_ui.go` - Spark UI service management
 
-#### ScheduledSparkApplication Controller
-**Location:** `internal/controller/scheduledsparkapplication/`
-
+#### ScheduledSparkApplication Controller (`internal/controller/scheduledsparkapplication/`)
 **Responsibilities:**
-- Watches ScheduledSparkApplication resources
-- Manages cron-based scheduling
-- Creates SparkApplication instances based on schedule
-- Handles schedule updates and deletions
+- Manage cron-based scheduling of Spark applications
+- Create SparkApplication instances based on schedule
+- Track execution history and handle concurrency policies
+- Clean up completed/failed application instances
 
-#### MutatingWebhookConfiguration Controller
-**Location:** `internal/controller/mutatingwebhookconfiguration/`
+### 3. Mutating Webhook (`internal/webhook/`)
 
-**Responsibilities:**
-- Manages the lifecycle of MutatingWebhookConfiguration
-- Ensures webhook certificate validity
-- Maintains webhook registration with the API server
+The webhook intercepts pod creation events and customizes Spark driver/executor pods before they're created.
 
-### 3. Mutating Admission Webhook
-
-**Location:** `internal/webhook/`
-
-The webhook intercepts pod creation requests for Spark driver and executor pods, enabling:
-- Mounting additional volumes (ConfigMaps, Secrets, PVCs)
-- Injecting environment variables
-- Setting pod affinity/anti-affinity rules
-- Applying node selectors and tolerations
-- Adding custom annotations and labels
-- Resource quota enforcement
-
-This allows customization beyond what Spark natively supports through its Kubernetes backend.
+**Functions:**
+- Pod mutation (`sparkpod_defaulter.go`):
+  - Add volumes and volume mounts
+  - Set environment variables
+  - Configure affinity/anti-affinity
+  - Add init containers and sidecars
+  - Configure resource quotas
+- Validation (`sparkapplication_validator.go`, `scheduledsparkapplication_validator.go`):
+  - Validate application specifications
+  - Check resource quota compliance
+  - Ensure required fields are present
 
 ### 4. Support Components
 
-#### Metrics Exporter
-**Location:** `internal/metrics/`
+#### Metrics (`internal/metrics/`)
+- Export Prometheus metrics for SparkApplications
+- Track submission rates, completion rates, failures
+- Monitor pod states (driver/executor metrics)
 
-Exports application-level and pod-level metrics to Prometheus for monitoring:
-- Application state and lifecycle events
-- Submission success/failure rates
-- Execution duration
-- Resource utilization
+#### Schedulers (`internal/scheduler/`)
+- Integration with batch schedulers:
+  - **Volcano** (`scheduler/volcano/`) - Gang scheduling for Spark
+  - **YuniKorn** (`scheduler/yunikorn/`) - Resource-aware scheduling
+  - **Kube-scheduler** (`scheduler/kubescheduler/`) - Default Kubernetes scheduler
 
-#### Scheduler Extender
-**Location:** `internal/scheduler/`
-
-Provides advanced scheduling capabilities:
-- Gang scheduling for driver and executors
-- Resource quota management
-- Custom scheduling policies
-
-#### Client Libraries
-**Location:** `pkg/client/`
-
-Generated clientsets for programmatic interaction with SparkApplication and ScheduledSparkApplication resources.
-
-### 5. Utilities and Helpers
-
-**Location:** `pkg/`
-
-- **certificate:** TLS certificate management for webhooks
-- **common:** Shared constants and utilities
-- **features:** Feature gate management
-- **scheme:** Kubernetes scheme registration
-- **util:** General-purpose helper functions
+#### Certificate Management (`pkg/certificate/`)
+- Manage TLS certificates for webhook server
+- Auto-rotation and renewal
 
 ## Workflow
 
 ### SparkApplication Lifecycle
 
-1. **Creation**
-   - User creates a SparkApplication CR via kubectl or API
-   - Controller detects the new resource through watch mechanism
+1. **User creates SparkApplication**
+   \`\`\`yaml
+   apiVersion: sparkoperator.k8s.io/v1beta2
+   kind: SparkApplication
+   metadata:
+     name: spark-pi
+   spec:
+     type: Scala
+     mode: cluster
+     image: spark:latest
+     mainClass: org.apache.spark.examples.SparkPi
+     ...
+   \`\`\`
 
-2. **Validation**
-   - Controller validates the SparkApplication spec
-   - Ensures required fields are present
-   - Validates resource specifications
+2. **Controller watches and reconciles**
+   - Controller detects new SparkApplication
+   - Validates specification
+   - Prepares spark-submit command
+   - Submits application to Spark
 
-3. **Submission**
-   - Controller generates spark-submit command
-   - Creates driver pod with appropriate configuration
-   - Driver pod is mutated by webhook (if enabled)
+3. **Spark creates driver pod**
+   - Kubernetes creates driver pod
+   - Webhook intercepts and customizes pod
+   - Driver pod starts running
 
-4. **Execution**
-   - Driver pod starts and requests executor pods from Kubernetes
-   - Executor pods are created and mutated by webhook
-   - Application runs with configured resources
+4. **Driver requests executors**
+   - Driver asks Kubernetes for executor pods
+   - Webhook customizes executor pods
+   - Executors start and connect to driver
 
-5. **Monitoring**
-   - Controller monitors driver and executor pod status
-   - Updates SparkApplication status with current state
-   - Exports metrics to Prometheus
+5. **Application runs**
+   - Controller monitors pod states
+   - Updates SparkApplication status
+   - Exposes metrics to Prometheus
 
-6. **Completion/Failure**
-   - Controller detects completion or failure
-   - Updates final status
-   - Handles cleanup based on configuration
-   - Triggers retry/restart if configured
+6. **Completion**
+   - Application completes (success or failure)
+   - Controller updates final status
+   - Cleanup based on TTL and restart policy
 
-7. **Cleanup**
-   - Removes executor pods
-   - Optionally removes driver pod based on configuration
-   - Maintains application history
+### ScheduledSparkApplication Lifecycle
 
-### Scheduled Application Workflow
+1. **User creates ScheduledSparkApplication**
+   - Defines SparkApplication template
+   - Specifies cron schedule
+   - Sets concurrency policy
 
-1. **Schedule Evaluation**
-   - ScheduledSparkApplication controller evaluates cron schedule
-   - Determines if a new run should be triggered
+2. **Controller evaluates schedule**
+   - Checks if it's time to run
+   - Applies concurrency policy
+   - Creates new SparkApplication instance
 
-2. **SparkApplication Creation**
-   - Creates a new SparkApplication instance from template
-   - Adds scheduling metadata and labels
+3. **SparkApplication runs** (follows normal lifecycle above)
 
-3. **Concurrency Management**
-   - Enforces concurrency policy (Allow/Forbid/Replace)
-   - Manages active runs based on policy
+4. **History management**
+   - Tracks successful/failed runs
+   - Cleans up old instances based on history limits
 
-4. **History Management**
-   - Maintains history of successful/failed runs
-   - Prunes old runs based on configured limits
+## Project Structure
 
-## Configuration and Deployment
+\`\`\`
+.
+├── api/                          # CRD definitions and types
+│   ├── v1alpha1/                 # Alpha API version (SparkConnect)
+│   └── v1beta2/                  # Stable API version
+├── charts/                       # Helm chart for deployment
+├── cmd/operator/                 # Main entry points
+│   ├── controller/               # Controller manager
+│   └── webhook/                  # Webhook server
+├── config/                       # Kubernetes manifests
+│   ├── crd/                      # CRD definitions
+│   ├── manager/                  # Operator deployment
+│   ├── rbac/                     # RBAC roles and bindings
+│   └── webhook/                  # Webhook configuration
+├── internal/                     # Internal packages
+│   ├── controller/               # Controllers
+│   ├── metrics/                  # Metrics exporters
+│   ├── scheduler/                # Batch scheduler integrations
+│   └── webhook/                  # Webhook handlers
+├── pkg/                          # Public packages
+│   ├── certificate/              # Certificate management
+│   ├── client/                   # Generated Kubernetes clients
+│   └── common/                   # Shared constants and utilities
+├── examples/                     # Example applications
+└── test/                         # E2E and integration tests
+\`\`\`
 
-### Installation Methods
+## Development
 
-1. **Helm Chart**
-   - Recommended for production deployments
-   - Location: `charts/spark-operator-chart/`
-   - Supports extensive customization via values
+### Building
 
-2. **Kustomize**
-   - Location: `config/`
-   - For declarative configuration management
-
-3. **Operator-based**
-   - Can be deployed via operator framework
-   - Provides lifecycle management
-
-### Configuration Options
-
-- **Webhook:** Enable/disable mutating webhook
-- **Namespace:** Single or multi-namespace mode
-- **RBAC:** Service accounts and role bindings
-- **Resource Quotas:** CPU/memory limits for operator
-- **Metrics:** Prometheus integration settings
-- **Image Pull:** Registry and pull secrets configuration
-
-## Development Guidelines
-
-### Project Structure
-
-```
-spark-operator/
-├── api/                      # CRD definitions and API types
-│   └── v1beta2/              # Current API version
-├── internal/                 # Internal packages
-│   ├── controller/           # Controller implementations
-│   ├── metrics/              # Metrics exporters
-│   ├── scheduler/            # Scheduler components
-│   └── webhook/              # Webhook handlers
-├── pkg/                      # Public libraries
-│   ├── client/               # Generated clients
-│   ├── common/               # Shared utilities
-│   └── util/                 # Helper functions
-├── charts/                   # Helm charts
-├── config/                   # Kustomize configs and CRD manifests
-├── examples/                 # Example SparkApplication YAMLs
-└── test/                     # Test suites
-
-```
-
-### Building and Testing
-
-```bash
-# Run unit tests
-make unit-test
-
-# Run e2e tests
-make e2e-test
-
+\`\`\`bash
 # Build operator binary
-make build-operator
+make build
 
 # Build Docker image
 make docker-build
 
-# Run linting
-make go-lint
-```
+# Run tests
+make test
 
-### Contributing
+# Run E2E tests
+make e2e-test
+\`\`\`
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, coding standards, and pull request guidelines.
+### Testing Locally
 
-## Security Considerations
+\`\`\`bash
+# Install CRDs
+make install
 
-1. **RBAC:** Operator requires cluster-wide permissions to watch and manage resources
-2. **Webhook TLS:** Requires valid TLS certificates for webhook communication
-3. **Service Accounts:** Spark applications run with dedicated service accounts
-4. **Network Policies:** Can be configured for pod-to-pod communication
-5. **Image Security:** Supports private registries and image pull secrets
+# Run operator locally (requires kubeconfig)
+make run
 
-## Performance and Scalability
+# Submit example application
+kubectl apply -f examples/spark-pi.yaml
+\`\`\`
 
-- **Controller Concurrency:** Configurable number of concurrent reconciliations
-- **Namespace Scoping:** Can be limited to specific namespaces
-- **Resource Management:** Implements efficient caching and watch mechanisms
-- **Metrics:** Low-overhead Prometheus metrics collection
+### Code Generation
 
-## Future Enhancements
+The operator uses Kubebuilder for scaffolding and code generation:
 
-- Enhanced autoscaling support
-- Multi-cluster deployment capabilities
-- Advanced scheduling policies
-- Improved observability and debugging tools
+\`\`\`bash
+# Generate CRD manifests
+make manifests
+
+# Generate deep copy methods
+make generate
+
+# Update API documentation
+make api-docs
+\`\`\`
+
+## Configuration
+
+### Operator Configuration
+- **Controller Manager** flags (`cmd/operator/controller/start.go`):
+  - Namespace to watch
+  - Resync period
+  - Worker threads
+  - Metrics address
+
+### SparkApplication Configuration
+Key spec fields:
+- `type`: Language (Scala, Java, Python, R)
+- `mode`: Deployment mode (cluster, client)
+- `image`: Spark Docker image
+- `driver/executor`: Resource requests/limits, configuration
+- `deps`: JARs, files, pyFiles
+- `monitoring`: Prometheus, metrics configuration
+- `batchScheduler`: Volcano, YuniKorn configuration
+
+## Security
+
+### RBAC
+- Operator requires cluster-admin for CRD management
+- SparkApplications run with service accounts
+- Fine-grained RBAC roles for different components
+
+### Pod Security
+- Webhook validates and can enforce pod security policies
+- Resource quotas prevent resource exhaustion
+- Network policies can isolate Spark jobs
+
+### Secrets Management
+- Support for imagePullSecrets
+- Hadoop configuration secrets
+- Custom secrets mounted as volumes or env vars
+
+## Performance & Scalability
+
+### Resource Management
+- Configurable resource requests/limits per driver/executor
+- Dynamic allocation support
+- Resource quota integration
+
+### Batch Scheduling
+- **Volcano**: Gang scheduling ensures all executors start together
+- **YuniKorn**: Queue-based scheduling with fairness
+- Prevents resource fragmentation
+
+### Monitoring
+- Prometheus metrics for operator health
+- Application-level metrics via Spark metrics
+- Custom metrics exporters
 
 ## References
 
-- [Kubeflow Spark Operator Documentation](https://www.kubeflow.org/docs/components/spark-operator/)
-- [API Documentation](docs/api-docs.md)
 - [User Guide](https://www.kubeflow.org/docs/components/spark-operator/user-guide/)
+- [API Documentation](docs/api-docs.md)
 - [Developer Guide](https://www.kubeflow.org/docs/components/spark-operator/developer-guide/)
-
-## License
-
-Apache License 2.0 - See [LICENSE](LICENSE) for details.
+- [Kubebuilder Book](https://book.kubebuilder.io/)
