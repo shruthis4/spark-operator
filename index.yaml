@@ -2,6 +2,26 @@ apiVersion: v1
 entries:
   spark-operator:
   - apiVersion: v2
+    appVersion: 2.5.0-rc.0
+    created: "2026-06-26T15:59:57.519057475Z"
+    description: A Helm chart for Spark on Kubernetes operator.
+    digest: 674cd8d4cd461ca5610f7a0599540bfe2fabf28987052087a760f058d3062590
+    home: https://github.com/kubeflow/spark-operator
+    keywords:
+    - apache spark
+    - big data
+    maintainers:
+    - email: yuchaoran2011@gmail.com
+      name: yuchaoran2011
+      url: https://github.com/yuchaoran2011
+    - email: github@chenyicn.net
+      name: ChenYi015
+      url: https://github.com/ChenYi015
+    name: spark-operator
+    urls:
+    - https://github.com/shruthis4/spark-operator/releases/download/spark-operator-2.5.0-rc.0/spark-operator-2.5.0-rc.0.tgz
+    version: 2.5.0-rc.0
+  - apiVersion: v2
     appVersion: 2.4.0
     created: "2026-01-05T17:39:09.309124754Z"
     description: A Helm chart for Spark on Kubernetes operator.
@@ -41,4 +61,4 @@ entries:
     urls:
     - https://github.com/shruthis4/spark-operator/releases/download/spark-operator-2.3.0/spark-operator-2.3.0.tgz
     version: 2.3.0
-generated: "2026-01-05T17:39:09.309137368Z"
+generated: "2026-06-26T15:59:57.519070539Z"
